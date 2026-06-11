@@ -1,0 +1,93 @@
+# COSMOS/ORBIT Lab Command Cheatsheet
+
+## Connecting
+```bash
+# Connect to a sandbox console
+ssh username@console.sb5.cosmos-lab.org   # change sb5 to your sandbox
+
+# Connect to a node (from console or directly)
+ssh root@node1-1.sb7.cosmos-lab.org
+```
+
+## Node Status
+```bash
+omf stat -t all                        # check all nodes
+omf stat -t node1-1,node1-2            # check specific nodes
+```
+
+## Power Control
+```bash
+omf tell -a on -t node1-1,node1-2      # power on
+omf tell -a off -t node1-1,node1-2     # software power off
+omf tell -a offh -t node1-1,node1-2    # hard power off (pull cord)
+omf tell -a reset -t node1-1,node1-2   # reset (like pressing reset button)
+```
+
+## Imaging Nodes
+```bash
+omf load -t node1-1,node1-2                              # load default baseline image
+omf load -i baseline-sdr.ndz -t node1-1,node1-2         # load specific image
+omf load -i baseline-sdr.ndz -t node1-1,node1-2 -r 40   # load and resize to 40GB
+```
+
+## Saving a Disk Image
+```bash
+# On the node first:
+/root/prepare.sh
+
+# Then on the console (must use full FQDN):
+omf save -t node1-1.sb1.cosmos-lab.org
+```
+
+## Network Config (on each node)
+```bash
+A       # add enp4s0 block, then CTRL-O, Enter, CTRL-X
+netplan apply
+```
+
+### Add to netplan yaml (node1-1 = .1, node1-2 = .2)
+```yaml
+    enp4s0:
+      dhcp4: false
+      addresses: [192.168.10.1/24]   # use .2 for node1-2
+```
+
+## Verify USRP Hardware
+```bash
+uhd_find_devices      # find connected USRPs
+uhd_usrp_probe        # detailed hardware info
+```
+
+## USRP Transmit/Receive
+```bash
+# Transmit sine wave
+./tx_waveforms --wave-freq 1e6 --wave-type SINE --freq 1800e6 --rate 5e6 --gain 10 --ampl 0.2
+
+# Transmit sawtooth wave
+./tx_waveforms --wave-freq 500e3 --wave-type RAMP --freq 1800e6 --rate 5e6 --gain 5 --ampl 0.1
+
+# View spectrum (ASCII art)
+./rx_ascii_art_dft --freq 1800e6 --gain 10 --rate 5e6 --frame-rate 10 --ref-lvl -30 --dyn-rng 70
+
+# Record samples to file
+./rx_samples_to_file --freq 1800e6 --rate 5e6 --type float
+```
+
+## UHD Examples Directory
+```bash
+cd ~/uhd/host/build/examples/
+# or
+cd /usr/local/lib/uhd/examples/
+# or
+cd /usr/lib/uhd/examples
+```
+
+## Troubleshooting
+```bash
+# If USRP not found, manually configure interface
+ifconfig eth2 192.168.10.1 netmask 255.255.255.0 up
+ping 192.168.10.2    # ping the USRP
+
+# Fix netplan if nano messes up
+cp 00-netplan.yaml.bak 00-netplan.yaml
+```

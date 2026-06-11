@@ -1,0 +1,67 @@
+USRP2 Radio Tutorial Summary
+=============================
+
+This tutorial uses two networked computers (nodes) on the COSMOS/ORBIT testbed, each connected to a USRP2 software-defined radio. One node acts as a transmitter and the other as a receiver. You configure the network interfaces so the computers can talk to their radios, then transmit waveforms over the air and visualize them in real time. It demonstrates the basics of software-defined radio: generating signals, transmitting them at a carrier frequency, and receiving/analyzing the spectrum.
+
+Key Concepts:
+- USRP2: a software-defined radio that can transmit and receive between 400-4400 MHz
+- Carrier frequency: the RF frequency the signal rides on (we used 1800 MHz)
+- Wave frequency: the baseband signal on top of the carrier (1 MHz sine, 500 kHz sawtooth)
+- Sine wave: produces a single spike in the spectrum
+- Sawtooth wave: produces multiple evenly spaced spikes (harmonics)
+- ASCII spectrum: live frequency plot displayed in the terminal
+
+=============================
+Commands In Order
+=============================
+
+# 1. Connect to the testbed console
+ssh tyler_thomassen@console.sb7.cosmos-lab.org
+
+# 2. Check node status
+omf stat -t all
+
+# 3. Power off nodes before imaging
+omf tell -a off -t node1-1,node1-2
+
+# 4. Load the SDR disk image onto both nodes
+omf load -i baseline-sdr.ndz -t node1-1,node1-2
+
+# 5. Turn nodes on after imaging
+omf tell -a on -t node1-1,node1-2
+
+# 6. SSH into each node (do in separate terminals)
+ssh root@node1-1.sb7.cosmos-lab.org
+ssh root@node1-2.sb7.cosmos-lab.org
+
+# 7. Configure network interface on each node (run on both)
+cd /etc/netplan/
+rm -rf 00-netplan-ifrename.yaml
+systemctl disable ifrename.service
+cp 00-netplan.yaml.bak 00-netplan.yaml
+nano 00-netplan.yaml        # add enp4s0 block (see below), save with CTRL-O then CTRL-X
+netplan apply               # apply the new config
+
+# Add this to the yaml file:
+#     enp4s0:
+#       dhcp4: false
+#       addresses: [192.168.10.1/24]
+
+# 8. Verify USRP is detected (run on both nodes)
+uhd_find_devices            # should show USRP at 192.168.10.2
+uhd_usrp_probe              # shows full hardware details
+
+# 9. Navigate to UHD examples folder (run on both nodes)
+cd /usr/lib/uhd/examples
+
+# 10. Transmit a sine wave (node1-1)
+./tx_waveforms --wave-freq 1e6 --wave-type SINE --freq 1800e6 --rate 5e6 --gain 10 --ampl 0.2
+
+# 11. View live spectrum (node1-2) -- should show spike at 1800 MHz
+./rx_ascii_art_dft --freq 1800e6 --gain 10 --rate 5e6 --frame-rate 10 --ref-lvl -30 --dyn-rng 70
+
+# 12. Stop transmitting (node1-1) -- spike disappears, only noise floor remains
+CTRL-C
+
+# 13. Transmit a sawtooth wave (node1-1) -- produces multiple peaks 500 kHz apart
+./tx_waveforms --wave-freq 500e3 --wave-type RAMP --freq 1800e6 --rate 5e6 --gain 5 --ampl 0.1
