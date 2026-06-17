@@ -1,4 +1,4 @@
-USRP2 Radio Tutorial Summary
+ssUSRP2 Radio Tutorial Summary
 =============================
 
 This tutorial uses two networked computers (nodes) on the COSMOS/ORBIT testbed, each connected to a USRP2 software-defined radio. One node acts as a transmitter and the other as a receiver. You configure the network interfaces so the computers can talk to their radios, then transmit waveforms over the air and visualize them in real time. It demonstrates the basics of software-defined radio: generating signals, transmitting them at a carrier frequency, and receiving/analyzing the spectrum.

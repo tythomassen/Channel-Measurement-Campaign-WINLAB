@@ -28,7 +28,7 @@ options:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [8, 76.0]
+    coordinate: [72, 92.0]
     rotation: 0
     state: enabled
 
@@ -51,7 +51,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [160, 68.0]
+    coordinate: [224, 84.0]
     rotation: 0
     state: enabled
 - name: rx_gain
@@ -72,7 +72,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [160, 168.0]
+    coordinate: [224, 188.0]
     rotation: 0
     state: enabled
 - name: samp_rate
@@ -84,7 +84,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [8, 144.0]
+    coordinate: [72, 160.0]
     rotation: 0
     state: enabled
 - name: qtgui_freq_sink_x_0
@@ -165,7 +165,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [500, 200.0]
+    coordinate: [560, 220.0]
     rotation: 0
     state: enabled
 - name: qtgui_waterfall_sink_x_0
@@ -226,7 +226,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [500, 380.0]
+    coordinate: [560, 396.0]
     rotation: 0
     state: enabled
 - name: uhd_usrp_source_0
@@ -662,7 +662,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [8, 300.0]
+    coordinate: [72, 312.0]
     rotation: 0
     state: enabled
 
