@@ -23,7 +23,7 @@ import numpy as np
 parser = argparse.ArgumentParser(description="OFDM frame generator")
 parser.add_argument("--fft", type=int, default=256)
 parser.add_argument("--cp", type=int, default=64)
-parser.add_argument("--rate", type=float, default=50e6)
+parser.add_argument("--rate", type=float, default=5e6)  # USRP2/GbE on sb7 — see tx_ofdm_ota.py/rx_capture_ota.py
 parser.add_argument("--freq", type=float, default=3.5e9)
 parser.add_argument("--n-frames", type=int, default=500)
 parser.add_argument("--seed", type=int, default=42)

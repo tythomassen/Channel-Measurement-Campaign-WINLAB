@@ -20,20 +20,22 @@ import uhd
 
 # ─── CLI ────────────────────────────────────────────────────────────
 parser = argparse.ArgumentParser(description="RX capture OTA")
-parser.add_argument("--args",     type=str,   default="type=x300,resource=RIO0")
-parser.add_argument("--rate",     type=float, default=50e6)
+# sb7 sandbox: USRP2 reached over GbE at its fixed IP, not a PCIe X310
+parser.add_argument("--args",     type=str,   default="addr=192.168.10.2")
+# USRP2/GbE can't sustain X310-class rates — keep at the sb7-proven 5 MSps
+parser.add_argument("--rate",     type=float, default=5e6)
 parser.add_argument("--freq",     type=float, default=3.5e9)
-# CHANGED: gain 31 → 31.5 (UBX-160 max — back off if clipping, see print below)
+# USRP2/SBX gain range is still 0-31.5 dB — back off if clipping, see print below
 parser.add_argument("--gain",     type=float, default=31.5)
 parser.add_argument("--duration", type=float, default=2.0,  help="Capture duration (s)")
 # NEW: settling time — flush this many seconds of samples before recording
 parser.add_argument("--settle",   type=float, default=0.5,
                     help="Settling time (s): samples received then discarded before capture")
 parser.add_argument("--out",      type=str,   default="rx_capture.npz")
-# NEW: clock/time reference source
-parser.add_argument("--ref",      type=str,   default="external",
+# sb7 nodes are standalone — no shared 10 MHz ref/PPS cable between them
+parser.add_argument("--ref",      type=str,   default="internal",
                     choices=["internal", "external", "gpsdo"],
-                    help="Clock/time reference (default: external)")
+                    help="Clock/time reference (default: internal on sb7)")
 args = parser.parse_args()
 
 nsamps_settle = int(args.rate * args.settle)

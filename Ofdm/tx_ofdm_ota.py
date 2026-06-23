@@ -19,16 +19,17 @@ import uhd
 
 # ─── CLI ────────────────────────────────────────────────────────────
 parser = argparse.ArgumentParser(description="TX OFDM OTA")
-parser.add_argument("--args",     type=str,   default="type=x300,resource=RIO0")
+# sb7 sandbox: USRP2 reached over GbE at its fixed IP, not a PCIe X310
+parser.add_argument("--args",     type=str,   default="addr=192.168.10.2")
 parser.add_argument("--waveform", type=str,   default="tx_waveform.npz")
-# CHANGED: gain 31.0 → 31.5 (UBX-160 max for best SNR)
+# USRP2/SBX gain range is still 0-31.5 dB, same as the X310/UBX-160
 parser.add_argument("--gain",     type=float, default=31.5)
 parser.add_argument("--rate",     type=float, default=None, help="Override sample rate")
 parser.add_argument("--freq",     type=float, default=None, help="Override center freq")
-# NEW: clock/time reference source
-parser.add_argument("--ref",      type=str,   default="external",
+# sb7 nodes are standalone — no shared 10 MHz ref/PPS cable between them
+parser.add_argument("--ref",      type=str,   default="internal",
                     choices=["internal", "external", "gpsdo"],
-                    help="Clock/time reference (default: external)")
+                    help="Clock/time reference (default: internal on sb7)")
 args = parser.parse_args()
 
 # ─── Load waveform ──────────────────────────────────────────────────
