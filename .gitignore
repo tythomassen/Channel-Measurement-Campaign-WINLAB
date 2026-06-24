@@ -1,1 +1,5 @@
 *.npz
+*.sigmf-data
+*.sigmf-meta
+__pycache__/
+Ofdm/run_2*/

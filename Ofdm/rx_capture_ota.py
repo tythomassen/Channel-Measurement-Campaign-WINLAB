@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-rx_capture_ota.py — Capture raw IQ samples via UHD, save to .npz.
-All OFDM processing happens offline in ofdm_postprocess.py.
+rx_capture_ota.py — Capture raw IQ samples via UHD, save as SigMF
+(<out>.sigmf-data + <out>.sigmf-meta). All OFDM processing happens
+offline in the postprocessing notebook.
 
 ★ Settling-time flush, max-SNR defaults, PCIe (resource=RIO0), external 10 MHz ref.
 
@@ -11,10 +12,12 @@ Usage:
   python3 rx_capture_ota.py                                # defaults (PCIe, external 10 MHz)
   python3 rx_capture_ota.py --ref internal                 # use internal oscillator
   python3 rx_capture_ota.py --settle 0.5 --duration 1.0    # 0.5s flush, 1s capture
-  python3 rx_capture_ota.py --gain 25 --out rx_p01.npz     # lower gain if clipping
+  python3 rx_capture_ota.py --gain 25 --out rx_p01          # lower gain if clipping
+                                                             # (--out is a basename, no extension —
+                                                             # writes rx_p01.sigmf-data/.sigmf-meta)
 """
 
-import argparse, sys, time
+import argparse, json, sys, time
 import numpy as np
 import uhd
 
@@ -31,11 +34,26 @@ parser.add_argument("--duration", type=float, default=2.0,  help="Capture durati
 # NEW: settling time — flush this many seconds of samples before recording
 parser.add_argument("--settle",   type=float, default=0.5,
                     help="Settling time (s): samples received then discarded before capture")
-parser.add_argument("--out",      type=str,   default="rx_capture.npz")
+parser.add_argument("--out",      type=str,   default="rx_capture",
+                    help="Output basename, no extension — writes <out>.sigmf-data + <out>.sigmf-meta")
 # sb7 nodes are standalone — no shared 10 MHz ref/PPS cable between them
 parser.add_argument("--ref",      type=str,   default="internal",
                     choices=["internal", "external", "gpsdo"],
                     help="Clock/time reference (default: internal on sb7)")
+# Experiment context — not measured by the radio, supplied by the caller.
+parser.add_argument("--tx-gain",        type=float, default=None,
+                    help="TX gain in dB used by the transmitter for this capture (None if TX was off)")
+parser.add_argument("--environment",    type=str,   default="unspecified",
+                    help="Physical environment label, e.g. indoor/outdoor/anechoic")
+parser.add_argument("--distance-m",     type=float, default=None,
+                    help="TX-RX physical separation in meters")
+parser.add_argument("--link-condition", type=str,   default="unspecified",
+                    choices=["los", "nlos", "unspecified"],
+                    help="Line-of-sight condition between TX and RX")
+# Waveform metadata file (deployed alongside this script) — used to auto-fill
+# modulation/protocol fields so they don't have to be hand-maintained here.
+parser.add_argument("--waveform",       type=str,   default="tx_waveform.npz",
+                    help="Path to the tx_waveform.npz used for this experiment (for protocol metadata)")
 args = parser.parse_args()
 
 nsamps_settle = int(args.rate * args.settle)
@@ -188,23 +206,74 @@ peak_val = np.max(np.abs(samples))
 print(f"\nCaptured {num_rx} samples in {dt:.3f}s ({num_rx/dt/1e6:.1f} MSps)")
 print(f"Overflows: {overflows} (settle: {overflows_settle})")
 print(f"Mean power: {power_db:.1f} dB, Peak |sample|: {peak_val:.4f}")
-if peak_val > 0.95:
+clipped = bool(peak_val > 0.95)
+if clipped:
     print(f"⚠ ADC clipping detected (peak={peak_val:.3f})! Lower --gain by 3-6 dB.")
     print(f"  Current gain: {args.gain:.1f} dB → try --gain {max(0, args.gain-6):.1f}")
 if overflows > 0:
     print(f"WARNING: {overflows} overflows during capture — data may have gaps")
 
-# ─── Save ───────────────────────────────────────────────────────────
-np.savez(
-    args.out,
-    samples=samples,
-    rate=args.rate,
-    freq=args.freq,
-    gain=args.gain,
-    num_overflows=overflows,
-    settle_time=args.settle,
-    ref_source=args.ref,
-    timestamp=time.strftime("%Y%m%d_%H%M%S"),
-)
+# ─── Save (SigMF: raw IQ + JSON sidecar) ────────────────────────────
+out_base = args.out
+for ext in (".npz", ".sigmf-data", ".sigmf-meta"):
+    if out_base.endswith(ext):
+        out_base = out_base[: -len(ext)]
+data_path = f"{out_base}.sigmf-data"
+meta_path = f"{out_base}.sigmf-meta"
+
+samples.astype(np.complex64).tofile(data_path)
+
+# Protocol/modulation fields — derived from the waveform file rather than
+# hand-duplicated here, so they can't drift out of sync with what was actually sent.
+protocol_meta = None
+try:
+    wf = np.load(args.waveform)
+    protocol_meta = {
+        "waveform": "custom-ofdm",
+        "fft_size": int(wf["fft"]),
+        "cp_len": int(wf["cp"]),
+        "frame_len": int(wf["frame_len"]),
+        "n_data_symbols": int(wf["n_data_sym"]),
+        "n_occupied_subcarriers": int(len(wf["occupied_pos"])),
+        "data_modulation": "QPSK",
+        "pilot_preamble_modulation": "BPSK",
+    }
+except (FileNotFoundError, KeyError) as e:
+    print(f"  Note: could not load waveform metadata from {args.waveform} ({e}) — "
+          f"protocol fields will be omitted from .sigmf-meta")
+
+capture_dt = time.strftime("%Y-%m-%dT%H:%M:%S.000000Z", time.gmtime())
+sigmf_meta = {
+    "global": {
+        "core:datatype": "cf32_le",
+        "core:sample_rate": args.rate,
+        "core:version": "1.0.0",
+        "core:author": "winlab-ofdm-ota",
+        "core:description": "OFDM OTA SNR sweep capture (sb7, USRP2)",
+        "winlab:rx_gain_db": args.gain,
+        "winlab:tx_gain_db": args.tx_gain,
+        "winlab:ref_source": args.ref,
+        "winlab:settle_time_s": args.settle,
+        "winlab:num_overflows": overflows,
+        "winlab:num_overflows_settle": overflows_settle,
+        "winlab:clipped": clipped,
+        "winlab:peak_sample": float(peak_val),
+        "winlab:environment": args.environment,
+        "winlab:tx_rx_distance_m": args.distance_m,
+        "winlab:link_condition": args.link_condition,
+        "winlab:protocol": protocol_meta,
+    },
+    "captures": [
+        {
+            "core:sample_start": 0,
+            "core:frequency": args.freq,
+            "core:datetime": capture_dt,
+        }
+    ],
+    "annotations": [],
+}
+with open(meta_path, "w") as f:
+    json.dump(sigmf_meta, f, indent=2)
+
 size_mb = samples.nbytes / 1e6
-print(f"\nSaved to {args.out} ({size_mb:.1f} MB)")
+print(f"\nSaved to {data_path} ({size_mb:.1f} MB) + {meta_path}")

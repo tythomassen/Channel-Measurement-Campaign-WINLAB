@@ -88,7 +88,7 @@ fails because the UHD Python bindings aren't on the default path on this image.
 ssh -A -J tyler_thomassen@console.sb7.cosmos-lab.org root@node1-1.sb7.cosmos-lab.org
 export PYTHONPATH=/usr/local/lib/python3.8/site-packages
 cd /root/ota_ofdm
-python3 tx_ofdm_ota.py --gain 20      # Ctrl+C to stop
+python3 tx_ofdm_ota.py --gain 20
 ```
 
 ## 4. On node1-2 (RX) — run in a separate terminal while TX is running

@@ -29,6 +29,13 @@ LOCAL_FILES = ["tx_ofdm_ota.py", "rx_capture_ota.py", "tx_waveform.npz"]
 # (31.5 dB), TX gains of 20+ clip the USRP2's ADC (see RUNBOOK.md).
 GAINS = [0, 5, 10, 15]
 
+# --- Physical experiment context (not measured by the radio) ---
+# Fill these in to match the actual sb7 node1-1/node1-2 deployment;
+# they get written into every capture's .sigmf-meta.
+ENVIRONMENT = "unspecified"      # e.g. "indoor-lab", "anechoic", "outdoor"
+DISTANCE_M = None                # TX-RX separation in meters
+LINK_CONDITION = "unspecified"   # "los", "nlos", or "unspecified"
+
 
 def deploy_files():
     """Push the TX/RX scripts and waveform to both sb7 nodes via the console jump host."""
@@ -45,6 +52,16 @@ def deploy_files():
     print("\nDeploy complete.\n")
 
 
+def context_args(tx_gain=None):
+    """Shared --environment/--distance-m/--link-condition (+ optional --tx-gain) flags."""
+    parts = [f"--environment {ENVIRONMENT}", f"--link-condition {LINK_CONDITION}"]
+    if DISTANCE_M is not None:
+        parts.append(f"--distance-m {DISTANCE_M}")
+    if tx_gain is not None:
+        parts.append(f"--tx-gain {tx_gain}")
+    return " ".join(parts)
+
+
 def main():
     deploy_files()
 
@@ -52,7 +69,7 @@ def main():
 
     for gain in GAINS:
         padded_gain = f"{gain:02d}"
-        out_file = f"rx_capture_cf{CENTER_FREQ}_g{padded_gain}.npz"
+        out_base = f"rx_capture_cf{CENTER_FREQ}_g{padded_gain}"
 
         print("\n" + "=" * 60)
         print(f"SWEEP STEP: Setting TX Gain to {gain} dB\n")
@@ -88,7 +105,8 @@ def main():
             "ssh", "-A", "-J", JUMP_HOST, RX_NODE,
             f"export PYTHONPATH=/usr/local/lib/python3.8/site-packages; "
             f"cd {REMOTE_DIR} && python3 rx_capture_ota.py "
-            f"--ref internal --rate {RATE} --freq {CENTER_FREQ} --out ./{out_file}"
+            f"--ref internal --rate {RATE} --freq {CENTER_FREQ} --out ./{out_base} "
+            f"{context_args(tx_gain=gain)}"
         ]
 
         subprocess.run(rx_cmd)
@@ -108,38 +126,25 @@ def main():
 
         time.sleep(3.0)  # Give the USRP2 time to fully reset before next iteration
 
-        # Pull the captured data file from the remote node back down to your local laptop
-        print(f"Pulling {out_file} to local workspace...\n")
-        scp_cmd = [
-            "scp", "-J", JUMP_HOST, f"{RX_NODE}:{REMOTE_DIR}/{out_file}", f"./{out_file}"
-        ]
-        scp_result = subprocess.run(scp_cmd)
-        if scp_result.returncode == 0:
-            print(f"Success: Saved ./{out_file}\n")
-        else:
-            print(f"SCP failed for {out_file}\n")
+        print(f"Capture saved on {RX_NODE}:{REMOTE_DIR}/{out_base}.sigmf-data (+.sigmf-meta)\n")
 
     # Noise floor — capture with TX off, needed by the postprocessing notebook
     # to compute SNR relative to the actual noise floor at each gain step.
     print("\n" + "=" * 60)
     print("Capturing noise floor (TX off)\n")
     print("=" * 60)
-    noise_file = "rx_noise.npz"
+    noise_base = "rx_noise"
     rx_cmd = [
         "ssh", "-A", "-J", JUMP_HOST, RX_NODE,
         f"export PYTHONPATH=/usr/local/lib/python3.8/site-packages; "
         f"cd {REMOTE_DIR} && python3 rx_capture_ota.py "
-        f"--ref internal --rate {RATE} --freq {CENTER_FREQ} --out ./{noise_file}"
+        f"--ref internal --rate {RATE} --freq {CENTER_FREQ} --out ./{noise_base} "
+        f"{context_args()}"
     ]
     subprocess.run(rx_cmd)
-    scp_cmd = ["scp", "-J", JUMP_HOST, f"{RX_NODE}:{REMOTE_DIR}/{noise_file}", f"./{noise_file}"]
-    scp_result = subprocess.run(scp_cmd)
-    if scp_result.returncode == 0:
-        print(f"Success: Saved ./{noise_file}\n")
-    else:
-        print(f"SCP failed for {noise_file}\n")
+    print(f"Capture saved on {RX_NODE}:{REMOTE_DIR}/{noise_base}.sigmf-data (+.sigmf-meta)\n")
 
-    print("Sweep completed! All files have been pulled locally.\n")
+    print(f"Sweep completed! All captures remain on {RX_NODE}:{REMOTE_DIR}/ — nothing was pulled locally.\n")
 
 
 if __name__ == "__main__":
